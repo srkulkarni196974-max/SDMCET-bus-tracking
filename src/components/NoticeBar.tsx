@@ -5,14 +5,49 @@ import { supabase, Notice } from '@/lib/supabase';
 import { Megaphone, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const NOTICE_EXPIRY_MS = 20 * 60 * 1000; // 20 minutes
+
 export default function NoticeBar() {
     const [notice, setNotice] = useState<Notice | null>(null);
     const [visible, setVisible] = useState(false);
 
+    const isNoticeValid = (createdAt: string) => {
+        const age = Date.now() - new Date(createdAt).getTime();
+        return age < NOTICE_EXPIRY_MS;
+    };
+
+    const handleDismiss = () => {
+        if (notice) {
+            const dismissed = JSON.parse(localStorage.getItem('dismissedNotices') || '[]');
+            dismissed.push(notice.id);
+            localStorage.setItem('dismissedNotices', JSON.stringify(dismissed));
+            setVisible(false);
+        }
+    };
+
     useEffect(() => {
+        const processNotice = (data: Notice) => {
+            const dismissed = JSON.parse(localStorage.getItem('dismissedNotices') || '[]');
+            if (isNoticeValid(data.created_at) && !dismissed.includes(data.id)) {
+                setNotice(data);
+                setVisible(true);
+
+                // Set timer to hide when it expires
+                const remainingTime = NOTICE_EXPIRY_MS - (Date.now() - new Date(data.created_at).getTime());
+                const timer = setTimeout(() => {
+                    setVisible(false);
+                }, remainingTime);
+
+                return timer;
+            }
+            return null;
+        };
+
+        let expiryTimer: NodeJS.Timeout | null = null;
+
         // Fetch latest notice
         const fetchLatestNotice = async () => {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('notices')
                 .select('*')
                 .order('created_at', { ascending: false })
@@ -20,8 +55,7 @@ export default function NoticeBar() {
                 .single();
 
             if (data) {
-                setNotice(data);
-                setVisible(true);
+                expiryTimer = processNotice(data);
             }
         };
 
@@ -34,14 +68,15 @@ export default function NoticeBar() {
                 'postgres_changes' as any,
                 { event: 'INSERT', table: 'notices' },
                 (payload: { new: Notice }) => {
-                    setNotice(payload.new);
-                    setVisible(true);
+                    if (expiryTimer) clearTimeout(expiryTimer);
+                    expiryTimer = processNotice(payload.new);
                 }
             )
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
+            if (expiryTimer) clearTimeout(expiryTimer);
         };
     }, []);
 
@@ -59,11 +94,11 @@ export default function NoticeBar() {
                             <Megaphone size={20} className="text-white" />
                         </div>
                         <div className="flex-1">
-                            <p className="text-sm font-medium text-slate-300">Live Notice</p>
-                            <p className="text-white font-semibold">{notice.content}</p>
+                            <p className="text-sm text-black font-medium text-slate-950">Live Notice</p>
+                            <p className="text-black font-semibold">{notice.content}</p>
                         </div>
                         <button
-                            onClick={() => setVisible(false)}
+                            onClick={handleDismiss}
                             className="p-1 hover:bg-white/10 rounded-full transition-colors"
                         >
                             <X size={20} className="text-slate-400" />

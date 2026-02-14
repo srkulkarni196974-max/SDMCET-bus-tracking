@@ -82,13 +82,6 @@ export default function Home() {
       <div className="ml-[400px] h-full w-[calc(100vw-400px)]">
         <BusMap activeBuses={activeBuses} />
       </div>
-
-      {/* Floating UI Elements over map */}
-      <div className="absolute top-8 right-8 z-[500] flex flex-col items-end gap-2">
-        <div className="glass px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-400 border border-white/10">
-          SDMCET Campus Map
-        </div>
-      </div>
     </main>
   );
 }

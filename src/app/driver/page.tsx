@@ -252,10 +252,10 @@ export default function DriverDashboard() {
             <div className="flex items-center justify-between mb-10">
                 <div>
                     <h2 className="text-2xl font-bold flex items-center gap-2">
-                        Terminal View v2.3
+                        Terminal View
                         <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_#3b82f6]" />
                     </h2>
-                    <p className="text-blue-500 text-[10px] font-bold uppercase tracking-[0.2em]">Operator: Campus Fleet (RELOADED)</p>
+                    <p className="text-blue-500 text-[10px] font-bold uppercase tracking-[0.2em]">Operator: Campus Fleet </p>
                 </div>
                 <div className="bg-white/5 p-3 rounded-2xl">
                     <ActivityStatus isTracking={isTracking} />
