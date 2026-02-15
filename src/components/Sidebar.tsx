@@ -92,7 +92,7 @@ export default function Sidebar({
                         placeholder="Search route or area..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full bg-white/5 border border-blue-500/10 rounded-2xl py-3 pl-12 pr-4 text-black placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                        className="w-full bg-white/5 border border-blue-500/10 rounded-2xl py-3 pl-12 pr-4 text-black placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
                     />
                 </div>
             </div>
