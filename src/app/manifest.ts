@@ -9,6 +9,13 @@ export default function manifest(): MetadataRoute.Manifest {
         display: 'standalone',
         background_color: '#020617',
         theme_color: '#2563eb',
+        shortcuts: [
+            {
+                name: 'Driver Dashboard',
+                url: '/driver',
+                icons: [{ src: '/icon-192x192.png', sizes: '192x192' }]
+            }
+        ],
         icons: [
             {
                 src: '/icon-192x192.png',

@@ -185,6 +185,16 @@ export default function Sidebar({
                     )}
                 </AnimatePresence>
             </div>
+
+            <div className="p-8 border-t border-white/5 bg-black/20">
+                <a
+                    href="/driver"
+                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white/5 border border-white/5 text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-blue-600 hover:text-white hover:border-blue-500 transition-all group"
+                >
+                    <Activity size={14} className="group-hover:text-white" />
+                    Driver Administration Portal
+                </a>
+            </div>
         </motion.div>
     );
 }
