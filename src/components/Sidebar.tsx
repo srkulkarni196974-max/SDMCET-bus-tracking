@@ -40,11 +40,16 @@ export default function Sidebar({
         fetchData();
     }, []);
 
-    const filteredRoutes = routes.filter(r =>
-        r.region === selectedRegion &&
-        (r.route_name.toLowerCase().includes(search.toLowerCase()) ||
-            r.description?.toLowerCase().includes(search.toLowerCase()))
-    );
+    const filteredRoutes = routes.filter(r => {
+        const matchesSearch = r.route_name.toLowerCase().includes(search.toLowerCase()) ||
+            r.description?.toLowerCase().includes(search.toLowerCase());
+
+        // If searching, show matches from ANY region
+        if (search.trim()) return matchesSearch;
+
+        // If not searching, only show routes for the selected region
+        return r.region === selectedRegion;
+    });
 
     return (
         <motion.div
@@ -74,8 +79,9 @@ export default function Sidebar({
                             onClick={() => {
                                 setSelectedRegion(region);
                                 setSelectedRoute('');
+                                setSearch(''); // Clear search when switching regions manually
                             }}
-                            className={`flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-all ${selectedRegion === region
+                            className={`flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-all ${selectedRegion === region && !search
                                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 font-semibold text-white'
                                 : 'text-slate-300 hover:text-white hover:bg-white/5 font-bold'
                                 }`}
@@ -89,25 +95,28 @@ export default function Sidebar({
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                     <input
                         type="text"
-                        placeholder="Search route or area..."
+                        placeholder="Search any Hubballi or Dharwad route..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full bg-white/5 border border-blue-500/10 rounded-2xl py-3 pl-12 pr-4 text-black placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                        className="w-full bg-white/5 border border-blue-500/10 rounded-2xl py-3 pl-12 pr-4 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium"
                     />
                 </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4 custom-scrollbar">
-                {!selectedRegion ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50">
+                {!selectedRegion && !search ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50 text-white">
                         <div className="bg-slate-800 p-4 rounded-full">
                             <MapPin size={32} />
                         </div>
-                        <p className="text-slate-400">Select a region to view available routes</p>
+                        <p className="text-slate-400">Select a region or search for a route</p>
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-2">Available Routes</h3>
+                        <div className="flex items-center justify-between px-2">
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">{search ? 'Search Results' : 'Available Routes'}</h3>
+                            {search && <span className="text-[10px] bg-blue-600/20 text-blue-500 px-2 py-0.5 rounded-full font-bold">Global</span>}
+                        </div>
                         {filteredRoutes.map(route => (
                             <button
                                 key={route.id}
