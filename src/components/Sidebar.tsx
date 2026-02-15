@@ -61,7 +61,7 @@ export default function Sidebar({
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
                 </button>
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-                    SDMCET <br /> <span className="text-blue-500">Bus Tracker</span>
+                    SDMCET <br /> <span className="text-white-500">Bus Tracker</span>
                 </h1>
                 <p className="text-slate-400 mt-2 text-sm">Real-time GPS Monitoring System</p>
             </div>
