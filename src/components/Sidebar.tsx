@@ -76,7 +76,7 @@ export default function Sidebar({
                                 setSelectedRoute('');
                             }}
                             className={`flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-all ${selectedRegion === region
-                                ? 'bg-blue-600 text-black shadow-lg shadow-blue-600/20'
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 font-semibold text-white'
                                 : 'text-slate-300 hover:text-white hover:bg-white/5 font-bold'
                                 }`}
                         >

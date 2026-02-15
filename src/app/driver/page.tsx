@@ -383,7 +383,7 @@ export default function DriverDashboard() {
                                             key={region}
                                             onClick={() => { setSelectedRegion(region); setSelectedRoute(null); }}
                                             className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all border ${selectedRegion === region
-                                                ? 'bg-white/10 border-blue-500 text-white'
+                                                ? 'bg-white/10 border-blue-500 text-white font-semibold '
                                                 : 'bg-transparent border-white/5 text-slate-300 font-bold'
                                                 }`}
                                         >
