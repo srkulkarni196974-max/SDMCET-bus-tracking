@@ -11,6 +11,8 @@ interface SidebarProps {
     selectedRoute: string;
     setSelectedRoute: (id: string) => void;
     activeBuses: (BusLocation & { buses: Bus })[];
+    isVisible: boolean;
+    setIsVisible: (visible: boolean) => void;
 }
 
 export default function Sidebar({
@@ -18,7 +20,9 @@ export default function Sidebar({
     setSelectedRegion,
     selectedRoute,
     setSelectedRoute,
-    activeBuses
+    activeBuses,
+    isVisible,
+    setIsVisible
 }: SidebarProps) {
     const [regions, setRegions] = useState<string[]>([]);
     const [routes, setRoutes] = useState<Route[]>([]);
@@ -43,8 +47,19 @@ export default function Sidebar({
     );
 
     return (
-        <div className="fixed top-0 left-0 w-[400px] h-full glass border-r border-white/10 z-[500] flex flex-col">
-            <div className="p-8">
+        <motion.div
+            initial={false}
+            animate={{ x: isVisible ? 0 : -410 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+            className="fixed top-0 left-0 w-full md:w-[400px] h-full glass border-r border-white/10 z-[500] flex flex-col shadow-2xl"
+        >
+            <div className="p-8 relative">
+                <button
+                    onClick={() => setIsVisible(false)}
+                    className="md:hidden absolute right-6 top-9 p-2 bg-white/5 rounded-xl text-slate-400"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
+                </button>
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
                     SDMCET <br /> <span className="text-blue-500">Bus Tracker</span>
                 </h1>
@@ -161,6 +176,6 @@ export default function Sidebar({
                     )}
                 </AnimatePresence>
             </div>
-        </div>
+        </motion.div>
     );
 }

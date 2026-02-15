@@ -1,9 +1,9 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, ScaleControl, ZoomControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, ScaleControl, ZoomControl, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Bus, BusLocation } from '@/lib/supabase';
+import { Bus, BusLocation, TripPath } from '@/lib/supabase';
 import { useEffect, useState, useRef } from 'react';
 
 // Fix Leaflet marker icon issue
@@ -22,6 +22,7 @@ const busIcon = new L.DivIcon({
 
 interface BusMapProps {
     activeBuses: (BusLocation & { buses: Bus })[];
+    tripPaths?: TripPath[];
 }
 
 function MapUpdater({ activeBuses }: BusMapProps) {
@@ -47,7 +48,7 @@ function MapUpdater({ activeBuses }: BusMapProps) {
     return null;
 }
 
-export default function BusMap({ activeBuses }: BusMapProps) {
+export default function BusMap({ activeBuses, tripPaths = [] }: BusMapProps) {
     // Default center at SDMCET, Dharwad
     const defaultCenter: [number, number] = [15.4419, 74.9818];
 
@@ -125,6 +126,30 @@ export default function BusMap({ activeBuses }: BusMapProps) {
                         </Popup>
                     </Marker>
                 ))}
+
+                {/* Render paths for each active bus */}
+                {activeBuses.map(bus => {
+                    const points = tripPaths
+                        .filter(p => p.license_plate === bus.license_plate)
+                        .map(p => [p.latitude, p.longitude] as [number, number]);
+
+                    if (points.length < 2) return null;
+
+                    return (
+                        <Polyline
+                            key={`path-${bus.license_plate}`}
+                            positions={points}
+                            pathOptions={{
+                                color: '#4f46e5',
+                                weight: 6,
+                                opacity: 0.6,
+                                lineJoin: 'round',
+                                lineCap: 'round',
+                                dashArray: '1, 10'
+                            }}
+                        />
+                    );
+                })}
 
                 <MapUpdater activeBuses={activeBuses} />
             </MapContainer>

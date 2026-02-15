@@ -30,24 +30,37 @@ CREATE TABLE notices (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+CREATE TABLE trip_paths (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    license_plate TEXT REFERENCES buses(license_plate) ON DELETE CASCADE,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- Enable Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE bus_locations;
 ALTER PUBLICATION supabase_realtime ADD TABLE notices;
+ALTER PUBLICATION supabase_realtime ADD TABLE trip_paths;
 
 -- RLS Policies (Allow public access for this MVP/Hobby project)
 ALTER TABLE buses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE routes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bus_locations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trip_paths ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow public read" ON buses FOR SELECT USING (true);
 CREATE POLICY "Allow public read" ON routes FOR SELECT USING (true);
 CREATE POLICY "Allow public read" ON bus_locations FOR SELECT USING (true);
 CREATE POLICY "Allow public read" ON notices FOR SELECT USING (true);
+CREATE POLICY "Allow public read" ON trip_paths FOR SELECT USING (true);
 
 CREATE POLICY "Allow public update" ON bus_locations FOR ALL USING (true);
 CREATE POLICY "Allow public insert" ON notices FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public insert" ON bus_locations FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public insert" ON trip_paths FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public delete" ON trip_paths FOR DELETE USING (true);
 
 -- Seed some initial data
 INSERT INTO routes (region, route_name, description) VALUES

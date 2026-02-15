@@ -31,6 +31,14 @@ export type BusLocation = {
   updated_at: string;
 };
 
+export type TripPath = {
+  id: string;
+  license_plate: string;
+  latitude: number;
+  longitude: number;
+  created_at: string;
+};
+
 export type Notice = {
   id: string;
   content: string;

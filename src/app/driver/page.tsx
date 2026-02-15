@@ -31,9 +31,12 @@ export default function DriverDashboard() {
     const [lastPos, setLastPos] = useState<{ lat: number, lng: number } | null>(null);
     const watchId = useRef<number | null>(null);
     const wakeLock = useRef<any>(null);
+    const autoTerminateTimer = useRef<NodeJS.Timeout | null>(null);
 
     const [noticeText, setNoticeText] = useState('');
     const [isBroadcasting, setIsBroadcasting] = useState(false);
+    const [remainingTime, setRemainingTime] = useState<number>(6000000); // 1h 40m in ms
+    const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -118,11 +121,38 @@ export default function DriverDashboard() {
             setIsTracking(true);
             requestWakeLock();
 
+            // Set auto-termination timer for 1 hour 40 minutes (6000000ms)
+            const startTime = Date.now();
+            setRemainingTime(6000000);
+
+            autoTerminateTimer.current = setTimeout(() => {
+                console.log('Auto-terminating trip after 1 hour 40 minutes');
+                stopTracking();
+            }, 6000000);
+
+            // Update countdown every minute
+            countdownInterval.current = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const remaining = Math.max(0, 6000000 - elapsed);
+                setRemainingTime(remaining);
+
+                if (remaining === 0 && countdownInterval.current) {
+                    clearInterval(countdownInterval.current);
+                }
+            }, 60000); // Update every minute
+
             // Get initial position immediately to activate the bus
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     const { latitude, longitude } = position.coords;
                     setLastPos({ lat: latitude, lng: longitude });
+
+                    // Record initial position for path
+                    await supabase.from('trip_paths').insert({
+                        license_plate: selectedBus.license_plate,
+                        latitude,
+                        longitude
+                    });
 
                     const { error, status, statusText } = await supabase
                         .from('bus_locations')
@@ -156,6 +186,13 @@ export default function DriverDashboard() {
                     const { latitude, longitude } = position.coords;
                     setLastPos({ lat: latitude, lng: longitude });
 
+                    // Record movement for path
+                    await supabase.from('trip_paths').insert({
+                        license_plate: selectedBus.license_plate,
+                        latitude,
+                        longitude
+                    });
+
                     const { error } = await supabase
                         .from('bus_locations')
                         .upsert({
@@ -178,6 +215,18 @@ export default function DriverDashboard() {
     };
 
     const stopTracking = async () => {
+        // Clear auto-termination timer
+        if (autoTerminateTimer.current) {
+            clearTimeout(autoTerminateTimer.current);
+            autoTerminateTimer.current = null;
+        }
+
+        // Clear countdown interval
+        if (countdownInterval.current) {
+            clearInterval(countdownInterval.current);
+            countdownInterval.current = null;
+        }
+
         if (watchId.current !== null) {
             navigator.geolocation.clearWatch(watchId.current);
         }
@@ -187,9 +236,16 @@ export default function DriverDashboard() {
         }
 
         if (selectedBus) {
+            // Terminate live status
             await supabase
                 .from('bus_locations')
                 .update({ is_active: false })
+                .eq('license_plate', selectedBus.license_plate);
+
+            // Delete recorded path points
+            await supabase
+                .from('trip_paths')
+                .delete()
                 .eq('license_plate', selectedBus.license_plate);
         }
 
@@ -419,6 +475,25 @@ export default function DriverDashboard() {
                                 </div>
                                 <p className="text-xs text-emerald-500/60 font-mono font-bold">
                                     {lastPos ? `${lastPos.lat.toFixed(6)}, ${lastPos.lng.toFixed(6)}` : 'Sourcing...'}
+                                </p>
+                            </div>
+
+                            {/* Auto-termination countdown */}
+                            <div className="bg-orange-500/10 border border-orange-500/20 p-5 rounded-2xl mb-6">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-500">
+                                            <circle cx="12" cy="12" r="10" />
+                                            <polyline points="12 6 12 12 16 14" />
+                                        </svg>
+                                        <span className="text-xs font-bold text-orange-500 uppercase tracking-widest">Auto-Terminate In</span>
+                                    </div>
+                                    <p className="text-lg font-mono font-bold text-orange-500">
+                                        {Math.floor(remainingTime / 60000)}m
+                                    </p>
+                                </div>
+                                <p className="text-[10px] text-orange-500/60 mt-2 font-medium">
+                                    Trip will auto-terminate after 1h 40m to prevent battery drain
                                 </p>
                             </div>
 

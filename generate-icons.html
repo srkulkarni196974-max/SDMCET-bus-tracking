@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Icon Generator</title>
+</head>
+<body>
+    <canvas id="canvas192" width="192" height="192"></canvas>
+    <canvas id="canvas512" width="512" height="512"></canvas>
+    <canvas id="appleIcon" width="180" height="180"></canvas>
+    
+    <script>
+        function createIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#3b82f6');
+            gradient.addColorStop(1, '#1e40af');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Draw bus icon
+            ctx.fillStyle = '#ffffff';
+            const scale = size / 192;
+            
+            // Bus body
+            ctx.fillRect(40 * scale, 60 * scale, 112 * scale, 80 * scale);
+            ctx.fillRect(50 * scale, 50 * scale, 92 * scale, 10 * scale);
+            
+            // Windows
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(50 * scale, 70 * scale, 35 * scale, 30 * scale);
+            ctx.fillRect(107 * scale, 70 * scale, 35 * scale, 30 * scale);
+            
+            // Wheels
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath();
+            ctx.arc(65 * scale, 145 * scale, 10 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(127 * scale, 145 * scale, 10 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // GPS pin
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(150 * scale, 40 * scale, 12 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(150 * scale, 40 * scale, 8 * scale, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        createIcon('canvas192', 192);
+        createIcon('canvas512', 512);
+        createIcon('appleIcon', 180);
+        
+        // Download instructions
+        console.log('Right-click each canvas and save as:');
+        console.log('- canvas192 -> icon-192x192.png');
+        console.log('- canvas512 -> icon-512x512.png');
+        console.log('- appleIcon -> apple-touch-icon.png');
+    </script>
+</body>
+</html>

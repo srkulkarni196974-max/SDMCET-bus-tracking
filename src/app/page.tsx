@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { supabase, BusLocation, Bus } from '@/lib/supabase';
+import { supabase, BusLocation, Bus, TripPath } from '@/lib/supabase';
 import Sidebar from '@/components/Sidebar';
 import NoticeBar from '@/components/NoticeBar';
 
@@ -16,10 +16,13 @@ export default function Home() {
   const [selectedRegion, setSelectedRegion] = useState('');
   const [selectedRoute, setSelectedRoute] = useState('');
   const [activeBuses, setActiveBuses] = useState<(BusLocation & { buses: Bus })[]>([]);
+  const [tripPaths, setTripPaths] = useState<TripPath[]>([]);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
 
   useEffect(() => {
     if (!selectedRoute) {
       setActiveBuses([]);
+      setTripPaths([]);
       return;
     }
 
@@ -38,7 +41,21 @@ export default function Home() {
         console.error('Supabase fetch error:', error);
       } else {
         console.log('Query result:', data);
-        setActiveBuses(data as any || []);
+        const buses = data as any || [];
+        setActiveBuses(buses);
+
+        if (buses.length > 0) {
+          const plates = buses.map((b: any) => b.license_plate);
+          const { data: pathData } = await supabase
+            .from('trip_paths')
+            .select('*')
+            .in('license_plate', plates)
+            .order('created_at', { ascending: true });
+
+          if (pathData) setTripPaths(pathData);
+        } else {
+          setTripPaths([]);
+        }
       }
     };
 
@@ -67,6 +84,13 @@ export default function Home() {
     };
   }, [selectedRoute]);
 
+  // Handle mobile sidebar behavior
+  useEffect(() => {
+    if (selectedRoute && typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsSidebarVisible(false);
+    }
+  }, [selectedRoute]);
+
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-slate-950">
       <NoticeBar />
@@ -77,11 +101,25 @@ export default function Home() {
         selectedRoute={selectedRoute}
         setSelectedRoute={setSelectedRoute}
         activeBuses={activeBuses}
+        isVisible={isSidebarVisible}
+        setIsVisible={setIsSidebarVisible}
       />
 
-      <div className="ml-[400px] h-full w-[calc(100vw-400px)]">
-        <BusMap activeBuses={activeBuses} />
+      <div className={`transition-all duration-500 h-full ${isSidebarVisible ? 'md:ml-[400px] w-full md:w-[calc(100vw-400px)]' : 'ml-0 w-full'
+        }`}>
+        <BusMap activeBuses={activeBuses} tripPaths={tripPaths} />
       </div>
+
+      {/* Floating Toggle Button for Mobile */}
+      {!isSidebarVisible && (
+        <button
+          onClick={() => setIsSidebarVisible(true)}
+          className="md:hidden fixed bottom-8 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full font-bold shadow-2xl shadow-blue-600/40 z-[1000] flex items-center gap-2 border border-blue-400/30"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+          Select Route
+        </button>
+      )}
     </main>
   );
 }
