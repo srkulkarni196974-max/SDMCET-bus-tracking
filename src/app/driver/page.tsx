@@ -78,6 +78,21 @@ export default function DriverDashboard() {
             if (locData) {
                 setActiveBusPlates(locData.map(l => l.license_plate));
             }
+
+            // Check for previous active session on mount
+            const savedSession = localStorage.getItem('active_tracking_session');
+            if (savedSession) {
+                const session = JSON.parse(savedSession);
+                const elapsed = Date.now() - session.startTime;
+                if (elapsed < 6000000) {
+                    setIsAuthenticated(true);
+                    setSelectedBus(session.bus);
+                    setSelectedRoute(session.route);
+                    // We don't auto-start tracking for safety, but we restore selections
+                } else {
+                    localStorage.removeItem('active_tracking_session');
+                }
+            }
         };
         fetchInitialData();
 
@@ -160,25 +175,26 @@ export default function DriverDashboard() {
                 }
             }
 
-            // Set auto-termination timer for 1 hour 40 minutes (6000000ms)
+            // Set auto-termination based on absolute time (more reliable than setTimeout)
             const startTime = Date.now();
+            localStorage.setItem('active_tracking_session', JSON.stringify({
+                startTime,
+                bus: selectedBus,
+                route: selectedRoute
+            }));
             setRemainingTime(6000000);
 
-            autoTerminateTimer.current = setTimeout(() => {
-                console.log('Auto-terminating trip after 1 hour 40 minutes');
-                stopTracking();
-            }, 6000000);
-
-            // Update countdown every minute
+            // Robust Check Interval
             countdownInterval.current = setInterval(() => {
                 const elapsed = Date.now() - startTime;
                 const remaining = Math.max(0, 6000000 - elapsed);
                 setRemainingTime(remaining);
 
-                if (remaining === 0 && countdownInterval.current) {
-                    clearInterval(countdownInterval.current);
+                if (remaining === 0) {
+                    console.log('AUTO-TERMINATE: Time limit reached.');
+                    stopTracking();
                 }
-            }, 60000); // Update every minute
+            }, 10000); // Check every 10 seconds for high reliability
 
             // Get initial position immediately to activate the bus
             navigator.geolocation.getCurrentPosition(
@@ -263,6 +279,8 @@ export default function DriverDashboard() {
     };
 
     const stopTracking = async () => {
+        localStorage.removeItem('active_tracking_session');
+
         // Clear auto-termination timer
         if (autoTerminateTimer.current) {
             clearTimeout(autoTerminateTimer.current);
