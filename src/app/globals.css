@@ -8,7 +8,7 @@
   /* slate-50 */
   --primary: #2563eb;
   /* blue-600 */
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.018);
   --glass-bg: rgba(15, 23, 42, 0.6);
 }
 
@@ -28,13 +28,9 @@ body {
 }
 
 .glass {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  --glass-bg: rgba(15, 23, 42, 0.6);
-
-
+  background: #020617;
+  /* Solid Slate-950 */
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .glass-card {
@@ -71,7 +67,7 @@ body {
 .leaflet-container {
   height: 100%;
   width: 100%;
-  background: #020617 !important;
+  background: #03081f !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
