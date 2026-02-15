@@ -11,7 +11,7 @@ const busIcon = new L.DivIcon({
     html: `<div class="relative w-12 h-12 flex items-center justify-center">
             <div class="absolute inset-0 bg-indigo-500 rounded-full animate-ping opacity-25"></div>
             <div class="absolute inset-2 bg-indigo-500 rounded-full animate-pulse opacity-40"></div>
-            <div class="absolute inset-3 bg-indigo-600 rounded-full border-4 border-white/95 flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.7)] z-10 transition-transform duration-500">
+            <div class="absolute inset-3 bg-indigo-600 rounded-full border-4 border-white/95 flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.7)] z-10 bus-marker-inner transition-all duration-1000">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="3" rx="2"/><path d="M4 11h16"/><path d="M8 15h.01"/><path d="M16 15h.01"/><path d="M6 19v2"/><path d="M18 21v-2"/></svg>
             </div>
           </div>`,
@@ -129,9 +129,12 @@ export default function BusMap({ activeBuses, tripPaths = [] }: BusMapProps) {
 
                 {/* Render paths for each active bus */}
                 {activeBuses.map(bus => {
-                    const points = tripPaths
+                    const historicalPoints = tripPaths
                         .filter(p => p.license_plate === bus.license_plate)
                         .map(p => [p.latitude, p.longitude] as [number, number]);
+
+                    // Append current live position to the path to make it "sync" perfectly
+                    const points = [...historicalPoints, [bus.latitude, bus.longitude] as [number, number]];
 
                     if (points.length < 2) return null;
 
@@ -141,11 +144,10 @@ export default function BusMap({ activeBuses, tripPaths = [] }: BusMapProps) {
                             positions={points}
                             pathOptions={{
                                 color: '#4f46e5',
-                                weight: 6,
-                                opacity: 0.6,
+                                weight: 5,
+                                opacity: 0.8,
                                 lineJoin: 'round',
                                 lineCap: 'round',
-                                dashArray: '1, 10'
                             }}
                         />
                     );

@@ -38,6 +38,30 @@ export default function DriverDashboard() {
     const [remainingTime, setRemainingTime] = useState<number>(6000000); // 1h 40m in ms
     const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
+    // Keep-alive references
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    useEffect(() => {
+        // Create invisible silent audio for keep-alive
+        const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhAAWAAcBAnZGF0YQAAAAA=');
+        audio.loop = true;
+        audioRef.current = audio;
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && isTracking) {
+                requestWakeLock();
+                // Play audio again if it was paused by OS
+                audioRef.current?.play().catch(() => { });
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            audioRef.current?.pause();
+        };
+    }, [isTracking]);
+
     useEffect(() => {
         const fetchInitialData = async () => {
             const { data: bData } = await supabase.from('buses').select('*');
@@ -121,6 +145,21 @@ export default function DriverDashboard() {
             setIsTracking(true);
             requestWakeLock();
 
+            // Start Keep-Alive Audio
+            if (audioRef.current) {
+                audioRef.current.play().catch(e => console.log('Audio keep-alive blocked until user interaction', e));
+
+                // Set Media Session metadata to prevent OS suspension
+                if ('mediaSession' in navigator) {
+                    (navigator as any).mediaSession.metadata = new (window as any).MediaMetadata({
+                        title: 'Live Bus Tracking',
+                        artist: selectedBus.bus_number,
+                        album: 'SDMCET Campus Fleet',
+                        artwork: [{ src: '/icon-512x512.png', sizes: '512x512', type: 'image/png' }]
+                    });
+                }
+            }
+
             // Set auto-termination timer for 1 hour 40 minutes (6000000ms)
             const startTime = Date.now();
             setRemainingTime(6000000);
@@ -177,22 +216,20 @@ export default function DriverDashboard() {
                     console.error('GPS Error:', error);
                     setSyncError(`GPS Error: ${error.message}`);
                 },
-                { enableHighAccuracy: true }
+                { enableHighAccuracy: true, timeout: 5000 }
             );
 
-            // Start watching for movement
+            // Start watching for movement with higher precision
             watchId.current = navigator.geolocation.watchPosition(
                 async (position) => {
-                    const { latitude, longitude } = position.coords;
+                    const { latitude, longitude, accuracy } = position.coords;
+
+                    // Ignore low accuracy jumps (over 100m)
+                    if (accuracy > 100) return;
+
                     setLastPos({ lat: latitude, lng: longitude });
 
-                    // Record movement for path
-                    await supabase.from('trip_paths').insert({
-                        license_plate: selectedBus.license_plate,
-                        latitude,
-                        longitude
-                    });
-
+                    // Update main location
                     const { error } = await supabase
                         .from('bus_locations')
                         .upsert({
@@ -204,12 +241,23 @@ export default function DriverDashboard() {
                             updated_at: new Date().toISOString()
                         }, { onConflict: 'license_plate' });
 
+                    // Log path point
+                    await supabase.from('trip_paths').insert({
+                        license_plate: selectedBus.license_plate,
+                        latitude,
+                        longitude
+                    });
+
                     if (error) {
-                        console.error('[v2] Movement Sync Error:', error.message || error.details || JSON.stringify(error));
+                        console.error('[v2] Movement Sync Error:', error.message);
                     }
                 },
                 (error) => console.error('Watch error:', error),
-                { enableHighAccuracy: true, maximumAge: 0 }
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 5000
+                }
             );
         }
     };
@@ -233,6 +281,11 @@ export default function DriverDashboard() {
         if (wakeLock.current) {
             wakeLock.current.release();
             wakeLock.current = null;
+        }
+
+        // Stop Keep-Alive Audio
+        if (audioRef.current) {
+            audioRef.current.pause();
         }
 
         if (selectedBus) {
@@ -305,7 +358,7 @@ export default function DriverDashboard() {
     return (
         <div className="min-h-screen bg-slate-950 text-white p-6 pb-24 max-w-2xl mx-auto">
             {/* Integrated Header */}
-            <div className="flex items-center justify-between mb-10">
+            <div className="flex items-center justify-between mb-8">
                 <div>
                     <h2 className="text-2xl font-bold flex items-center gap-2">
                         Terminal View
@@ -315,6 +368,21 @@ export default function DriverDashboard() {
                 </div>
                 <div className="bg-white/5 p-3 rounded-2xl">
                     <ActivityStatus isTracking={isTracking} />
+                </div>
+            </div>
+
+            {/* PWA Installation Warning */}
+            <div className="mb-8 p-4 rounded-3xl bg-blue-600/10 border border-blue-500/20">
+                <div className="flex gap-4">
+                    <div className="bg-blue-600 p-3 rounded-2xl h-fit">
+                        <Power size={20} />
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-bold mb-1 text-white">Background Tracking Enabled</h4>
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                            For tracking to work while the phone is locked or in another app, please <b>Install this App</b> (Share {'>'} Add to Home Screen) and keep the screen on during the trip.
+                        </p>
+                    </div>
                 </div>
             </div>
 
@@ -503,6 +571,19 @@ export default function DriverDashboard() {
                             >
                                 Terminate Active Session
                             </button>
+
+                            {/* Background Stability Hint */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="mt-6 p-4 rounded-2xl bg-white/5 border border-white/5 text-[10px] text-slate-500 font-medium"
+                            >
+                                <p className="flex items-center gap-2 mb-1 text-slate-400">
+                                    <div className="w-1 h-1 rounded-full bg-blue-500" />
+                                    BACKGROUND OPTIMIZATION ACTIVE
+                                </p>
+                                <p>To ensure 100% location accuracy while the screen is locked, please keep this tab active and avoid closing the browser. The "Keep-Alive" system is currently preventing the device from suspending the tracking session.</p>
+                            </motion.div>
                         </div>
                     </div>
 
