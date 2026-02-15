@@ -74,7 +74,7 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: blueviolet;
+  background: black;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
