@@ -14,8 +14,6 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
@@ -27,10 +25,13 @@ To learn more about Next.js, take a look at the following resources:
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js)
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+<img width="956" height="472" alt="image" src="https://github.com/user-attachments/assets/85025f3f-f43a-4aea-96b5-ba808903ec62" />
+<img width="611" height="416" alt="image" src="https://github.com/user-attachments/assets/e8e4a5d2-f720-4ef0-b366-9c31bf824f5b" />
+<img width="485" height="427" alt="image" src="https://github.com/user-attachments/assets/312a449c-1107-40a0-b1c3-52f8b2634219" />
+
+
