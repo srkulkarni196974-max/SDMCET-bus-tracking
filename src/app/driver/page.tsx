@@ -255,6 +255,13 @@ export default function DriverDashboard() {
                 setLastPos({ lat: latitude, lng: longitude });
 
                 if (selectedBus && selectedRoute) {
+                    // Log path point first to guarantee it is committed when coordinates update is broadcast
+                    await supabase.from('trip_paths').insert({
+                        license_plate: selectedBus.license_plate,
+                        latitude,
+                        longitude
+                    });
+
                     // Update main location
                     const { error } = await supabase
                         .from('bus_locations')
@@ -266,13 +273,6 @@ export default function DriverDashboard() {
                             is_active: true,
                             updated_at: new Date().toISOString()
                         }, { onConflict: 'license_plate' });
-
-                    // Log path point
-                    await supabase.from('trip_paths').insert({
-                        license_plate: selectedBus.license_plate,
-                        latitude,
-                        longitude
-                    });
 
                     if (error) {
                         console.error('[v2] Movement Sync Error:', error.message);

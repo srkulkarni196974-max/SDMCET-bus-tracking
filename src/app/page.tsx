@@ -39,31 +39,40 @@ export default function Home() {
       console.log('--- FETCHING ACTIVE BUSES ---');
       console.log('Route ID selected:', selectedRoute);
 
-      const { data, error } = await supabase
+      const { data: busesData, error: busesError } = await supabase
         .from('bus_locations')
         .select('*, buses(*)')
         .eq('route_id', selectedRoute)
         .eq('is_active', true);
 
-      if (error) {
-        console.error('Supabase fetch error:', error);
-      } else {
-        console.log('Query result:', data);
-        const buses = (data as unknown as (BusLocation & { buses: Bus })[]) || [];
-        setActiveBuses(buses);
+      if (busesError) {
+        console.error('Supabase fetch error:', busesError);
+        return;
+      }
 
-        if (buses.length > 0) {
-          const plates = buses.map((b) => b.license_plate);
-          const { data: pathData } = await supabase
-            .from('trip_paths')
-            .select('*')
-            .in('license_plate', plates)
-            .order('created_at', { ascending: true });
+      const buses = (busesData as unknown as (BusLocation & { buses: Bus })[]) || [];
 
-          if (pathData) setTripPaths(pathData);
-        } else {
-          setTripPaths([]);
+      if (buses.length > 0) {
+        const plates = buses.map((b) => b.license_plate);
+        const { data: pathData, error: pathError } = await supabase
+          .from('trip_paths')
+          .select('*')
+          .in('license_plate', plates)
+          .order('created_at', { ascending: true });
+
+        if (pathError) {
+          console.error('Supabase path fetch error:', pathError);
+          return;
         }
+
+        // Batch both state updates to prevent flickering and line stutters
+        setActiveBuses(buses);
+        if (pathData) {
+          setTripPaths(pathData);
+        }
+      } else {
+        setActiveBuses([]);
+        setTripPaths([]);
       }
     };
 
