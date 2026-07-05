@@ -19,10 +19,18 @@ export default function Home() {
   const [tripPaths, setTripPaths] = useState<TripPath[]>([]);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
 
-  useEffect(() => {
-    if (!selectedRoute) {
+  const handleSelectRoute = (routeId: string) => {
+    setSelectedRoute(routeId);
+    if (!routeId) {
       setActiveBuses([]);
       setTripPaths([]);
+    } else if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsSidebarVisible(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedRoute) {
       return;
     }
 
@@ -41,11 +49,11 @@ export default function Home() {
         console.error('Supabase fetch error:', error);
       } else {
         console.log('Query result:', data);
-        const buses = data as any || [];
+        const buses = (data as unknown as (BusLocation & { buses: Bus })[]) || [];
         setActiveBuses(buses);
 
         if (buses.length > 0) {
-          const plates = buses.map((b: any) => b.license_plate);
+          const plates = buses.map((b) => b.license_plate);
           const { data: pathData } = await supabase
             .from('trip_paths')
             .select('*')
@@ -65,30 +73,24 @@ export default function Home() {
     const channel = supabase
       .channel(`location-updates-${selectedRoute}`)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes',
         {
           event: '*',
+          schema: 'public',
           table: 'bus_locations'
         },
-        (payload: any) => {
+        (payload) => {
           console.log('REALTIME PAYLOAD:', payload);
           fetchBuses();
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         console.log('SUBSCRIPTION STATUS:', status);
       });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedRoute]);
-
-  // Handle mobile sidebar behavior
-  useEffect(() => {
-    if (selectedRoute && typeof window !== 'undefined' && window.innerWidth < 768) {
-      setIsSidebarVisible(false);
-    }
   }, [selectedRoute]);
 
   return (
@@ -99,7 +101,7 @@ export default function Home() {
         selectedRegion={selectedRegion}
         setSelectedRegion={setSelectedRegion}
         selectedRoute={selectedRoute}
-        setSelectedRoute={setSelectedRoute}
+        setSelectedRoute={handleSelectRoute}
         activeBuses={activeBuses}
         isVisible={isSidebarVisible}
         setIsVisible={setIsSidebarVisible}

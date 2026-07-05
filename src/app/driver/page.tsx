@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase, Bus, Route } from '@/lib/supabase';
 import {
     Bus as BusIcon,
@@ -10,11 +10,14 @@ import {
     AlertTriangle,
     MessageSquare,
     Lock,
-    ChevronRight,
     Loader2,
     CheckCircle2
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+
+interface WakeLockSentinel {
+    release(): Promise<void>;
+}
 
 export default function DriverDashboard() {
     const [passcode, setPasscode] = useState('');
@@ -30,8 +33,7 @@ export default function DriverDashboard() {
     const [isTracking, setIsTracking] = useState(false);
     const [lastPos, setLastPos] = useState<{ lat: number, lng: number } | null>(null);
     const watchId = useRef<number | null>(null);
-    const wakeLock = useRef<any>(null);
-    const autoTerminateTimer = useRef<NodeJS.Timeout | null>(null);
+    const wakeLock = useRef<WakeLockSentinel | null>(null);
 
     const [noticeText, setNoticeText] = useState('');
     const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -40,6 +42,40 @@ export default function DriverDashboard() {
 
     // Keep-alive references
     const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    async function requestWakeLock() {
+        try {
+            if ('wakeLock' in navigator) {
+                const nav = navigator as unknown as {
+                    wakeLock: {
+                        request(type: 'screen'): Promise<WakeLockSentinel>;
+                    };
+                };
+                wakeLock.current = await nav.wakeLock.request('screen');
+            }
+        } catch (err) {
+            console.error('Wake Lock failed:', err);
+        }
+    }
+
+    const stopTracking = useCallback(async () => {
+        localStorage.removeItem('active_tracking_session');
+        setIsTracking(false);
+
+        if (selectedBus) {
+            // Terminate live status
+            await supabase
+                .from('bus_locations')
+                .update({ is_active: false })
+                .eq('license_plate', selectedBus.license_plate);
+
+            // Delete recorded path points
+            await supabase
+                .from('trip_paths')
+                .delete()
+                .eq('license_plate', selectedBus.license_plate);
+        }
+    }, [selectedBus]);
 
     useEffect(() => {
         // Create invisible silent audio for keep-alive
@@ -88,6 +124,7 @@ export default function DriverDashboard() {
                     setIsAuthenticated(true);
                     setSelectedBus(session.bus);
                     setSelectedRoute(session.route);
+                    setRemainingTime(6000000 - elapsed);
                     // We don't auto-start tracking for safety, but we restore selections
                 } else {
                     localStorage.removeItem('active_tracking_session');
@@ -99,18 +136,25 @@ export default function DriverDashboard() {
         // Subscribe to occupancy changes
         const channel = supabase
             .channel('bus-occupancy')
-            .on('postgres_changes' as any, { event: '*', table: 'bus_locations' }, (payload: any) => {
-                const updatedPlate = payload.new.license_plate || payload.old.license_plate;
-                const isActive = payload.new.is_active;
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'bus_locations' },
+                (payload) => {
+                    const newPayload = payload as unknown as { new: { license_plate?: string; is_active?: boolean }; old: { license_plate?: string } };
+                    const updatedPlate = newPayload.new.license_plate || newPayload.old.license_plate;
+                    const isActive = newPayload.new.is_active;
 
-                setActiveBusPlates(prev => {
-                    if (isActive) {
-                        return prev.includes(updatedPlate) ? prev : [...prev, updatedPlate];
-                    } else {
-                        return prev.filter(p => p !== updatedPlate);
-                    }
-                });
-            })
+                    if (!updatedPlate) return;
+
+                    setActiveBusPlates(prev => {
+                        if (isActive) {
+                            return prev.includes(updatedPlate) ? prev : [...prev, updatedPlate];
+                        } else {
+                            return prev.filter(p => p !== updatedPlate);
+                        }
+                    });
+                }
+            )
             .subscribe();
 
         return () => {
@@ -127,124 +171,90 @@ export default function DriverDashboard() {
         }
     };
 
-    const requestWakeLock = async () => {
-        try {
-            if ('wakeLock' in navigator) {
-                wakeLock.current = await (navigator as any).wakeLock.request('screen');
-            }
-        } catch (err) {
-            console.error('Wake Lock failed:', err);
-        }
-    };
-
     const [syncError, setSyncError] = useState<string | null>(null);
 
-    const startTracking = async () => {
-        if (!selectedBus || !selectedRoute) return;
-        setSyncError(null);
-
-        console.log('--- STARTING TRACKING DIAGNOSTICS ---');
-        try {
-            const testConn = await supabase.from('bus_locations').select('count', { count: 'exact', head: true });
-            if (testConn.error) {
-                console.error('DIAGNOSTIC: Table unreachable', testConn.error);
-                setSyncError(`Database Error: ${testConn.error.message} (Code: ${testConn.error.code})`);
-                return;
+    // Sync all external side-effects (wake lock, media sessions, audio playback, gps watching, countdown timer)
+    useEffect(() => {
+        if (!isTracking) {
+            if (watchId.current !== null) {
+                navigator.geolocation.clearWatch(watchId.current);
+                watchId.current = null;
             }
-        } catch (e: any) {
-            setSyncError(`Connection Failed: ${e.message}`);
+            if (wakeLock.current) {
+                wakeLock.current.release().catch(() => {});
+                wakeLock.current = null;
+            }
+            if (audioRef.current) {
+                audioRef.current.pause();
+            }
+            if (countdownInterval.current) {
+                clearInterval(countdownInterval.current);
+                countdownInterval.current = null;
+            }
             return;
         }
 
-        if ('geolocation' in navigator) {
-            setIsTracking(true);
-            requestWakeLock();
+        // --- Active Tracking Setup ---
+        requestWakeLock();
 
-            // Start Keep-Alive Audio
-            if (audioRef.current) {
-                audioRef.current.play().catch(e => console.log('Audio keep-alive blocked until user interaction', e));
+        // Start Keep-Alive Audio
+        if (audioRef.current) {
+            audioRef.current.play().catch(e => console.log('Audio keep-alive blocked until user interaction', e));
 
-                // Set Media Session metadata to prevent OS suspension
-                if ('mediaSession' in navigator) {
-                    (navigator as any).mediaSession.metadata = new (window as any).MediaMetadata({
+            // Set Media Session metadata to prevent OS suspension
+            if ('mediaSession' in navigator && selectedBus) {
+                const nav = navigator as unknown as {
+                    mediaSession: {
+                        metadata: MediaMetadata | null;
+                    };
+                };
+                const win = window as unknown as {
+                    MediaMetadata: new (init: { title: string; artist: string; album: string; artwork: { src: string; sizes: string; type: string }[] }) => MediaMetadata;
+                };
+                try {
+                    nav.mediaSession.metadata = new win.MediaMetadata({
                         title: 'Live Bus Tracking',
                         artist: selectedBus.bus_number,
                         album: 'SDMCET Campus Fleet',
                         artwork: [{ src: '/icon-512x512.png', sizes: '512x512', type: 'image/png' }]
                     });
+                } catch (err) {
+                    console.error('Failed to set media session metadata:', err);
                 }
             }
+        }
 
-            // Set auto-termination based on absolute time (more reliable than setTimeout)
-            const startTime = Date.now();
-            localStorage.setItem('active_tracking_session', JSON.stringify({
-                startTime,
-                bus: selectedBus,
-                route: selectedRoute
-            }));
-            setRemainingTime(6000000);
+        // Set auto-termination based on absolute time
+        const startTime = Date.now();
+        localStorage.setItem('active_tracking_session', JSON.stringify({
+            startTime,
+            bus: selectedBus,
+            route: selectedRoute
+        }));
 
-            // Robust Check Interval
-            countdownInterval.current = setInterval(() => {
-                const elapsed = Date.now() - startTime;
-                const remaining = Math.max(0, 6000000 - elapsed);
-                setRemainingTime(remaining);
+        countdownInterval.current = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, 6000000 - elapsed);
+            setRemainingTime(remaining);
 
-                if (remaining === 0) {
-                    console.log('AUTO-TERMINATE: Time limit reached.');
-                    stopTracking();
-                }
-            }, 10000); // Check every 10 seconds for high reliability
+            if (remaining === 0) {
+                console.log('AUTO-TERMINATE: Time limit reached.');
+                stopTracking();
+            }
+        }, 10000); // Check every 10 seconds for high reliability
 
-            // Get initial position immediately to activate the bus
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const { latitude, longitude } = position.coords;
-                    setLastPos({ lat: latitude, lng: longitude });
+        // Start watching for movement with higher precision
+        watchId.current = navigator.geolocation.watchPosition(
+            async (position) => {
+                setSyncError(null); // Clear errors upon successfully getting coordinates
+                const { latitude, longitude, accuracy } = position.coords;
 
-                    // Record initial position for path
-                    await supabase.from('trip_paths').insert({
-                        license_plate: selectedBus.license_plate,
-                        latitude,
-                        longitude
-                    });
+                // Ignore low accuracy jumps (over 100m)
+                if (accuracy > 100) return;
 
-                    const { error, status, statusText } = await supabase
-                        .from('bus_locations')
-                        .upsert({
-                            license_plate: selectedBus.license_plate,
-                            route_id: selectedRoute.id,
-                            latitude,
-                            longitude,
-                            is_active: true,
-                            updated_at: new Date().toISOString()
-                        }, { onConflict: 'license_plate' });
+                setLastPos({ lat: latitude, lng: longitude });
 
-                    if (error) {
-                        const errMsg = `[v2] Sync Failed [${status}]: ${error.message} (Code: ${error.code})`;
-                        console.error(errMsg, error);
-                        setSyncError(errMsg);
-                    } else {
-                        console.log('[v2] DRIVER: Live Tracking Active. Status:', status);
-                    }
-                },
-                (error) => {
-                    console.error('GPS Error:', error);
-                    setSyncError(`GPS Error: ${error.message}`);
-                },
-                { enableHighAccuracy: true, timeout: 5000 }
-            );
-
-            // Start watching for movement with higher precision
-            watchId.current = navigator.geolocation.watchPosition(
-                async (position) => {
-                    const { latitude, longitude, accuracy } = position.coords;
-
-                    // Ignore low accuracy jumps (over 100m)
-                    if (accuracy > 100) return;
-
-                    setLastPos({ lat: latitude, lng: longitude });
-
+                if (selectedBus && selectedRoute) {
                     // Update main location
                     const { error } = await supabase
                         .from('bus_locations')
@@ -267,60 +277,114 @@ export default function DriverDashboard() {
                     if (error) {
                         console.error('[v2] Movement Sync Error:', error.message);
                     }
-                },
-                (error) => console.error('Watch error:', error),
-                {
-                    enableHighAccuracy: true,
-                    maximumAge: 0,
-                    timeout: 5000
                 }
-            );
+            },
+            (error) => {
+                console.error('Watch error:', error);
+                if (error.code !== error.TIMEOUT) {
+                    setSyncError(`GPS Watch Error: ${error.message}`);
+                }
+            },
+            {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 10000 // 10 seconds is more realistic for high accuracy fixes
+            }
+        );
+
+        return () => {
+            if (watchId.current !== null) {
+                navigator.geolocation.clearWatch(watchId.current);
+                watchId.current = null;
+            }
+            if (wakeLock.current) {
+                wakeLock.current.release().catch(() => {});
+                wakeLock.current = null;
+            }
+            if (audioRef.current) {
+                audioRef.current.pause();
+            }
+            if (countdownInterval.current) {
+                clearInterval(countdownInterval.current);
+                countdownInterval.current = null;
+            }
+        };
+    }, [isTracking, selectedBus, selectedRoute, stopTracking]);
+
+    const startTracking = async () => {
+        if (!selectedBus || !selectedRoute) return;
+        setSyncError(null);
+
+        console.log('--- STARTING TRACKING DIAGNOSTICS ---');
+        try {
+            const testConn = await supabase.from('bus_locations').select('count', { count: 'exact', head: true });
+            if (testConn.error) {
+                console.error('DIAGNOSTIC: Table unreachable', testConn.error);
+                setSyncError(`Database Error: ${testConn.error.message} (Code: ${testConn.error.code})`);
+                return;
+            }
+        } catch (err: unknown) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            setSyncError(`Connection Failed: ${errMsg}`);
+            return;
         }
-    };
 
-    const stopTracking = async () => {
-        localStorage.removeItem('active_tracking_session');
+        if ('geolocation' in navigator) {
+            const options = { enableHighAccuracy: true, timeout: 10000 };
+            const fallbackOptions = { enableHighAccuracy: false, timeout: 5000 };
 
-        // Clear auto-termination timer
-        if (autoTerminateTimer.current) {
-            clearTimeout(autoTerminateTimer.current);
-            autoTerminateTimer.current = null;
+            const getInitialPos = (opts: PositionOptions, isFallback = false) => {
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        setSyncError(null); // Clear errors on success
+                        const { latitude, longitude } = position.coords;
+                        setLastPos({ lat: latitude, lng: longitude });
+
+                        // Record initial position for path
+                        await supabase.from('trip_paths').insert({
+                            license_plate: selectedBus.license_plate,
+                            latitude,
+                            longitude
+                        });
+
+                        const { error, status } = await supabase
+                            .from('bus_locations')
+                            .upsert({
+                                license_plate: selectedBus.license_plate,
+                                route_id: selectedRoute.id,
+                                latitude,
+                                longitude,
+                                is_active: true,
+                                updated_at: new Date().toISOString()
+                            }, { onConflict: 'license_plate' });
+
+                        if (error) {
+                            const errMsg = `[v2] Sync Failed [${status}]: ${error.message} (Code: ${error.code})`;
+                            console.error(errMsg, error);
+                            setSyncError(errMsg);
+                        } else {
+                            console.log('[v2] DRIVER: Live Tracking Active. Status:', status);
+                            setRemainingTime(6000000);
+                            setIsTracking(true);
+                        }
+                    },
+                    (error) => {
+                        console.error(isFallback ? 'GPS Fallback Error:' : 'GPS Error:', error);
+                        if (!isFallback && error.code === error.TIMEOUT) {
+                            console.log('GPS Timeout, trying fallback with lower accuracy...');
+                            getInitialPos(fallbackOptions, true);
+                        } else {
+                            setSyncError(`GPS Error: ${error.message}`);
+                        }
+                    },
+                    opts
+                );
+            };
+
+            getInitialPos(options);
+        } else {
+            setSyncError('GPS Error: Geolocation is not supported by your browser.');
         }
-
-        // Clear countdown interval
-        if (countdownInterval.current) {
-            clearInterval(countdownInterval.current);
-            countdownInterval.current = null;
-        }
-
-        if (watchId.current !== null) {
-            navigator.geolocation.clearWatch(watchId.current);
-        }
-        if (wakeLock.current) {
-            wakeLock.current.release();
-            wakeLock.current = null;
-        }
-
-        // Stop Keep-Alive Audio
-        if (audioRef.current) {
-            audioRef.current.pause();
-        }
-
-        if (selectedBus) {
-            // Terminate live status
-            await supabase
-                .from('bus_locations')
-                .update({ is_active: false })
-                .eq('license_plate', selectedBus.license_plate);
-
-            // Delete recorded path points
-            await supabase
-                .from('trip_paths')
-                .delete()
-                .eq('license_plate', selectedBus.license_plate);
-        }
-
-        setIsTracking(false);
     };
 
     const broadcastNotice = async (text: string) => {
@@ -600,7 +664,7 @@ export default function DriverDashboard() {
                                     <div className="w-1 h-1 rounded-full bg-blue-500" />
                                     BACKGROUND OPTIMIZATION ACTIVE
                                 </p>
-                                <p>To ensure 100% location accuracy while the screen is locked, please keep this tab active and avoid closing the browser. The "Keep-Alive" system is currently preventing the device from suspending the tracking session.</p>
+                                <p>To ensure 100% location accuracy while the screen is locked, please keep this tab active and avoid closing the browser. The &quot;Keep-Alive&quot; system is currently preventing the device from suspending the tracking session.</p>
                             </motion.div>
                         </div>
                     </div>

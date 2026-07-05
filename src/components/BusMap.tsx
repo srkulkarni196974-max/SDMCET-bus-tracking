@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, ScaleCon
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Bus, BusLocation, TripPath } from '@/lib/supabase';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 // Fix Leaflet marker icon issue
 const busIcon = new L.DivIcon({

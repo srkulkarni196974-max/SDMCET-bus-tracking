@@ -65,11 +65,12 @@ export default function NoticeBar() {
         const channel = supabase
             .channel('notices_changes')
             .on(
-                'postgres_changes' as any,
-                { event: 'INSERT', table: 'notices' },
-                (payload: { new: Notice }) => {
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'notices' },
+                (payload) => {
                     if (expiryTimer) clearTimeout(expiryTimer);
-                    expiryTimer = processNotice(payload.new);
+                    const newPayload = payload as unknown as { new: Notice };
+                    expiryTimer = processNotice(newPayload.new);
                 }
             )
             .subscribe();
